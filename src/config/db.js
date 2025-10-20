@@ -1,12 +1,10 @@
-import mongoose from 'mongoose';
+import { neon } from "@neondatabase/serverless";
+import dotenv from "dotenv";
 
-export const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_CONNECTIONSTRING);
-    console.log('MongoDB connected');
-  
-    } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
+dotenv.config();
+
+const { PGUSER, PGPASSWORD, PGHOST, PGDATABASE } = process.env;
+
+const connectionString = `postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}/${PGDATABASE}`;
+
+export const sql = neon(connectionString);
