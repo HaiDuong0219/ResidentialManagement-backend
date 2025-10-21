@@ -1,10 +1,10 @@
 import express from 'express';
 import { 
-    getAllMeetings,
-    getMeetingById, 
-    createMeeting, 
-    updateMeeting, 
-    deleteMeeting 
+  getAllMeetings,
+  getMeetingById, 
+  createMeeting, 
+  updateMeeting, 
+  deleteMeeting 
 } from '../controllers/meetingsController.js';
 
 const router = express.Router();
