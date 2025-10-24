@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 
 import meetingsRoutes from './routes/meetingsRoutes.js';
 import residentsRoutes from './routes/residentsRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
+import usersRoutes from './routes/usersRoutes.js';
 
 dotenv.config();
 
@@ -20,6 +22,8 @@ app.use(cors());
 
 app.use("/api/meetings", meetingsRoutes);
 app.use("/api/residents", residentsRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/users", usersRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
