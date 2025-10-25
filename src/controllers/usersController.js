@@ -11,13 +11,16 @@ export const getAllUsers = async (req, res) => {
 
 export const getUserByEmail = async (req, res) => {
   try {
-    const { email } = req.body;
-    const user = await sql.query('SELECT * FROM account WHERE email = $1', [email]);
-    if (user.rows.length === 0) {
+    const { email } = req.query;
+    const user = await sql.query(
+      'SELECT * FROM account WHERE email = $1', 
+      [email]);
+    if (user.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.status(200).json({ success: true, data: user.rows[0] });
+    res.status(200).json({ success: true, data: user[0] });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
