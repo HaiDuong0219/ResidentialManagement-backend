@@ -30,9 +30,6 @@ export const createAttendance = async (req, res) => {
 
 export const updateAttendance = async (req, res) => {
   const { meeting_id, household_id, attended } = req.body;
-  if (!meeting_id || !household_id || attended === undefined) {
-    return res.status(400).json({ error: "All fields are required" });
-  }
   try {
     await sql.query(
       "UPDATE attendance SET meeting_id = $1, household_id = $2, attended = $3 WHERE meeting_id = $1 AND household_id = $2",
