@@ -58,7 +58,7 @@ CREATE TABLE ResidentLog (
     change_type VARCHAR(100) NOT NULL,               -- Ví dụ: Thêm mới, Cập nhật, Chuyển đi,...
     change_details JSONB,                            -- Dữ liệu cũ/mới ở dạng JSON
     note TEXT,
-    change_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    change_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (resident_id) REFERENCES Resident(id) ON DELETE CASCADE
 );
@@ -72,7 +72,7 @@ CREATE TABLE TemporaryStayLeave (
     start_date DATE NOT NULL,
     end_date DATE,
     reason TEXT,
-    approval_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    approval_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (resident_id) REFERENCES Resident(id) ON DELETE CASCADE
 );
@@ -86,7 +86,7 @@ CREATE TABLE Meeting (
     content TEXT,                                    -- Nội dung chi tiết
     tasks TEXT[],                                    -- Danh sách nhiệm vụ / công việc
     location TEXT NOT NULL,
-    time TIMESTAMP WITH TIME ZONE NOT NULL,
+    time TIMESTAMP NOT NULL,
     creator_id INT,                                  -- ID người tạo (tài khoản cán bộ)
 
     FOREIGN KEY (creator_id) REFERENCES Account(id)
