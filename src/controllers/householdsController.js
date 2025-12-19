@@ -80,9 +80,11 @@ export const getHouseholdResidents = async (req, res) => {
   const { household_code } = req.params;
   try {
     const residents = await sql.query(`
-      SELECT * FROM resident 
-      WHERE household_id = $1 
-      ORDER BY relation_to_head, full_name
+      SELECT r.*
+      FROM resident r
+      JOIN household h ON r.household_id = h.id
+      WHERE h.household_code = $1
+      ORDER BY r.relation_to_head, r.full_name;
     `, [household_code]);
     
     res.status(200).json({ success: true, data: residents });
@@ -121,7 +123,7 @@ export const deleteHousehold = async (req, res) => {
   const { id } = req.params;
   
   try {
-    const residents = await sql.query('SELECT COUNT(*) FROM resident WHERE household_id = (SELECT household_code FROM household WHERE id = $1)', [id]);
+    const residents = await sql.query('SELECT COUNT(*) FROM resident WHERE household_id = $1', [id]);
     
     if (residents[0].count > 0) {
       return res.status(400).json({ 
