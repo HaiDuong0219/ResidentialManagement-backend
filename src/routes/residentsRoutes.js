@@ -5,13 +5,15 @@ import {
     getResidentById,
     getResidentsByHouseholdId,
     updateResident,
-    deleteResident
+    deleteResident,
+    getResidentStatistics
 } from '../controllers/residentsController.js';
 
 const router = express.Router();
 
 router.post('/', createResident);
 router.get('/', getAllResidents);
+router.get('/statistics', getResidentStatistics);
 router.get('/:id', getResidentById);
 router.get("/household/:household_id", getResidentsByHouseholdId);
 router.put('/:id', updateResident);
