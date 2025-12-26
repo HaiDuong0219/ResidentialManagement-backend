@@ -38,7 +38,7 @@ CREATE TABLE Household (
 -- Bảng Resident: lưu thông tin nhân khẩu
 CREATE TABLE Resident (
     id SERIAL PRIMARY KEY,                 -- Khóa chính nhân khẩu
-    household_id INT NOT NULL,             -- FK → Household.id (nhân khẩu thuộc hộ nào)
+    household_id INT NOT NULL,             -- FK → Household.id (nhân khẩu thường trú tại hộ nào)
 
     full_name VARCHAR(150) NOT NULL,       -- Họ tên
     date_of_birth DATE NOT NULL,            -- Ngày sinh
@@ -52,11 +52,9 @@ CREATE TABLE Resident (
     id_issue_place TEXT,                    -- Nơi cấp CCCD
 
     registration_date DATE,                 -- Ngày đăng ký thường trú
-    previous_address TEXT,                  -- Địa chỉ trước đây
     relation_to_head VARCHAR(100),          -- Quan hệ với chủ hộ
-    gender VARCHAR(10)
-        CHECK (gender IN ('Male', 'Female')), -- Giới tính
-    status VARCHAR(50) DEFAULT 'Permanent', -- Trạng thái cư trú
+    gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')), -- Giới tính
+    status VARCHAR(50) DEFAULT 'Permanent', -- Trạng thái cư trú (TemporaryStay, TemporaryLeave, Thường trú, Tạm trú, Tạm vắng)
 
     -- Khóa ngoại: nhân khẩu thuộc về 1 hộ gia đình
     CONSTRAINT fk_resident_household
@@ -102,21 +100,31 @@ CREATE TABLE ResidentLog (
 
 -- Bảng TemporaryStayLeave: quản lý tạm trú / tạm vắng
 CREATE TABLE TemporaryStayLeave (
-    id SERIAL PRIMARY KEY,                 -- Khóa chính
-    resident_id INT NOT NULL,              -- FK → Resident.id
-    declarant_name VARCHAR(150),           -- Người khai báo (nếu khác)
+    id SERIAL PRIMARY KEY,
+
+    resident_id INT NOT NULL,              -- Nhân khẩu nào
+    declarant_name VARCHAR(150),           -- Người khai báo
+
     paper_type VARCHAR(20) NOT NULL
-        CHECK (paper_type IN ('Temporary leave', 'Temporary stay')),
-                                           -- Loại giấy
-    start_date DATE NOT NULL,              -- Ngày bắt đầu
-    end_date DATE,                         -- Ngày kết thúc
-    reason TEXT,                           -- Lý do
+        CHECK (paper_type IN ('TemporaryStay', 'TemporaryLeave')),
+
+    -- Thông tin tạm trú (chỉ dùng khi TemporaryStay)
+    temporary_address TEXT,
+    temporary_household_id INT,
+
+    start_date DATE NOT NULL,
+    end_date DATE,
+    reason TEXT,
+
     approval_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    -- Khi xóa nhân khẩu → xóa luôn hồ sơ tạm trú/vắng
     FOREIGN KEY (resident_id)
-    REFERENCES Resident(id)
-    ON DELETE CASCADE
+        REFERENCES Resident(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (temporary_household_id)
+        REFERENCES Household(id)
+        ON DELETE SET NULL
 );
 
 
