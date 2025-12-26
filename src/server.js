@@ -8,6 +8,7 @@ import residentsRoutes from './routes/residentsRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import usersRoutes from './routes/usersRoutes.js';
 import householdsRoutes from './routes/householdsRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 dotenv.config();
 
@@ -26,7 +27,9 @@ app.use("/api/residents", residentsRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/households", householdsRoutes);
+app.use("/api/auth", authRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+

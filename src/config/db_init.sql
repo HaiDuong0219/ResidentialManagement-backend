@@ -47,7 +47,7 @@ CREATE TABLE Resident (
     ethnicity VARCHAR(50),                  -- Dân tộc
     occupation VARCHAR(150),                -- Nghề nghiệp
 
-    id_number VARCHAR(20) UNIQUE,           -- CCCD / Hộ chiếu
+    id_number VARCHAR(20) UNIQUE,           -- CMND / CCCD
     id_issue_date DATE,                     -- Ngày cấp CCCD
     id_issue_place TEXT,                    -- Nơi cấp CCCD
 
