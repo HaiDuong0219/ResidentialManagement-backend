@@ -9,6 +9,7 @@ import attendanceRoutes from './routes/attendanceRoutes.js';
 import usersRoutes from './routes/usersRoutes.js';
 import householdsRoutes from './routes/householdsRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import temporaryStayLeaveRoutes from './routes/temporaryStayLeaveRoutes.js';
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/households", householdsRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/temporary-stay-leave", temporaryStayLeaveRoutes); 
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
