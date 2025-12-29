@@ -153,6 +153,10 @@ CREATE TABLE Attendance (
     household_id INT NOT NULL,              -- FK → Household.id
     attended BOOLEAN DEFAULT FALSE,         -- TRUE: tham dự, FALSE: vắng
 
+
+    absence_reason VARCHAR(255),
+    checked_at DATE,
+
     -- Mỗi hộ chỉ có 1 bản ghi điểm danh / cuộc họp
     PRIMARY KEY (meeting_id, household_id),
 
