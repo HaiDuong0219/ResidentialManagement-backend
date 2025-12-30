@@ -292,3 +292,126 @@ export const deleteAttendance = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+// Thống kê mức độ tham gia họp theo thời gian
+export const getAttendanceStatistics = async (req, res) => {
+  try {
+    // Lấy tổng số hộ gia đình
+    const totalHouseholds = await sql.query(`
+      SELECT COUNT(*) as total FROM household
+    `);
+
+    // Thống kê tham gia theo từng cuộc họp, sắp xếp theo thời gian
+    const attendanceStats = await sql.query(`
+      SELECT 
+        m.id as meeting_id,
+        m.topic,
+        m.time,
+        (SELECT COUNT(*) FROM household) as total_households,
+        COUNT(CASE WHEN a.attended = TRUE THEN 1 END) as attended_count,
+        COUNT(CASE WHEN a.attended = FALSE THEN 1 END) as absent_count,
+        ROUND(
+          COUNT(CASE WHEN a.attended = TRUE THEN 1 END)::numeric / 
+          NULLIF((SELECT COUNT(*) FROM household), 0) * 100, 
+          2
+        ) as attendance_rate
+      FROM meeting m
+      LEFT JOIN attendance a ON a.meeting_id = m.id
+      GROUP BY m.id, m.topic, m.time
+      ORDER BY m.time ASC
+    `);
+
+    // Format dữ liệu cho biểu đồ đường
+    const attendanceArray = Array.isArray(attendanceStats) ? attendanceStats : [];
+    const totalHouseholdsCount = Array.isArray(totalHouseholds) && totalHouseholds.length > 0 
+      ? parseInt(totalHouseholds[0].total) || 0 
+      : 0;
+
+    const chartData = attendanceArray.map(stat => {
+      const meetingDate = stat.time ? new Date(stat.time) : null;
+      const dateLabel = meetingDate 
+        ? `${meetingDate.getDate()}/${meetingDate.getMonth() + 1}/${meetingDate.getFullYear()}`
+        : 'N/A';
+      
+      const attended = parseInt(stat.attended_count) || 0;
+      const absent = parseInt(stat.absent_count) || 0;
+      const totalForMeeting = attended + absent;
+      const totalHouseholdsForMeeting = totalForMeeting > 0 ? totalForMeeting : totalHouseholdsCount;
+      
+      return {
+        date: dateLabel,
+        time: stat.time, // Giữ nguyên time để filter
+        meetingId: stat.meeting_id,
+        topic: stat.topic || 'Không có chủ đề',
+        totalHouseholds: totalHouseholdsForMeeting,
+        attended: attended,
+        absent: absent,
+        attendanceRate: parseFloat(stat.attendance_rate) || 0
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalHouseholds: totalHouseholdsCount,
+        meetings: chartData
+      }
+    });
+  } catch (error) {
+    console.error('Attendance statistics error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+// Thống kê top 3 hộ gia đình đi họp nhiều nhất
+export const getTopAttendingHouseholds = async (req, res) => {
+  try {
+    // Lấy tổng số cuộc họp
+    const totalMeetingsResult = await sql.query(`SELECT COUNT(*) as total FROM meeting`);
+    const totalMeetings = Array.isArray(totalMeetingsResult) && totalMeetingsResult.length > 0
+      ? parseInt(totalMeetingsResult[0].total) || 0
+      : 0;
+
+    const topHouseholds = await sql.query(`
+      SELECT 
+        h.id as household_id,
+        h.household_code,
+        r.full_name as head_name,
+        COUNT(CASE WHEN a.attended = TRUE THEN 1 END) as attendance_count
+      FROM household h
+      LEFT JOIN resident r ON r.id = h.head_id
+      LEFT JOIN attendance a ON a.household_id = h.id AND a.attended = TRUE
+      GROUP BY h.id, h.household_code, r.full_name
+      HAVING COUNT(CASE WHEN a.attended = TRUE THEN 1 END) > 0
+      ORDER BY attendance_count DESC
+      LIMIT 3
+    `);
+
+    const topHouseholdsArray = Array.isArray(topHouseholds) ? topHouseholds : [];
+    
+    const result = topHouseholdsArray.map((household, index) => {
+      const attendanceCount = parseInt(household.attendance_count) || 0;
+      const attendanceRate = totalMeetings > 0 
+        ? (attendanceCount / totalMeetings * 100).toFixed(2)
+        : 0;
+      
+      return {
+        rank: index + 1,
+        householdId: parseInt(household.household_id) || 0,
+        householdCode: household.household_code || '',
+        headName: household.head_name || 'Chưa có chủ hộ',
+        attendanceCount: attendanceCount,
+        totalMeetings: totalMeetings,
+        attendanceRate: parseFloat(attendanceRate)
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Top attending households error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
