@@ -27,19 +27,23 @@ export const login = async (req, res) => {
   }
 
   try {
-    const result = await sql.query('SELECT password_hash FROM account WHERE email = $1', [email]);
-
-    // debug: in trường hợp driver trả khác cấu trúc, in ra để kiểm tra
-    console.log('SQL result:', result);
+    const result = await sql.query(
+      'SELECT password_hash, status FROM account WHERE email = $1',
+      [email]
+    );
 
     // support both { rows: [...] } and [...] return shapes
-    const rows = result?.rows ?? result;
+    const rows = Array.isArray(result?.rows) ? result.rows : Array.isArray(result) ? result : [];
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const user = rows[0];
+
+    if (user?.status === false) {
+      return res.status(403).json({ error: 'Account is disabled' });
+    }
 
     const isMatch = (password_hash === user.password_hash);
 
