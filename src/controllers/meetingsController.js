@@ -26,12 +26,15 @@ export const getMeetingById = async (req, res) => {
 }
 
 export const createMeeting = async (req, res) => {
-  const { topic, content, tasks, location, time, creator_id } = req.body;
+  const { topic, content, tasks, location, time, creator_id, color } = req.body;
   if(!topic || !content || !tasks || !location || !time || !creator_id) {
     return res.status(400).json({ error: 'All fields are required' });
   }
   try {
-    await sql.query("INSERT INTO meeting (topic, content, tasks, location, time, creator_id) VALUES ($1, $2, $3, $4, $5, $6)", [topic, content, tasks, location, time, creator_id]);
+    await sql.query(
+      "INSERT INTO meeting (topic, content, tasks, location, time, creator_id, color) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, '#32f1cd'))",
+      [topic, content, tasks, location, time, creator_id, color]
+    );
     res.status(201).json({ success: true, message: 'Meeting created successfully' });
   } catch (error) {
     //console.error('Error creating meeting:', error);
@@ -42,8 +45,11 @@ export const createMeeting = async (req, res) => {
 export const updateMeeting = async (req, res) => {
   const { id } = req.params;
   try {
-    const { topic, content, tasks, location, time, creator_id } = req.body;
-    await sql.query("UPDATE meeting SET topic = $1, content = $2, tasks = $3, location = $4, time = $5, creator_id = $6 WHERE id = $7", [topic, content, tasks, location, time, creator_id, id]);
+    const { topic, content, tasks, location, time, creator_id, color } = req.body;
+    await sql.query(
+      "UPDATE meeting SET topic = $1, content = $2, tasks = $3, location = $4, time = $5, creator_id = $6, color = COALESCE($7, color) WHERE id = $8",
+      [topic, content, tasks, location, time, creator_id, color, id]
+    );
     res.status(200).json({ success: true, message: 'Meeting updated successfully' });
   } catch (error) {
     //console.error('Error updating meeting:', error);

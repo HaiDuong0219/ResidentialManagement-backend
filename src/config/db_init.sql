@@ -142,6 +142,7 @@ CREATE TABLE Meeting (
     location TEXT NOT NULL,                -- Địa điểm
     time TIMESTAMP NOT NULL,               -- Thời gian họp
     creator_id INT,                        -- Người tạo cuộc họp (Account)
+    color TEXT DEFAULT '#32f1cd',        -- Màu hiển thị cuộc họp trên lịch
 
     FOREIGN KEY (creator_id)
     REFERENCES Account(id)
