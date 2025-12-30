@@ -174,3 +174,120 @@ export const deleteTemporaryStayLeave = async (req, res) => {
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 };
+
+// Thống kê biến động tạm trú và tạm vắng theo thời gian
+export const getTemporaryStayLeaveStatistics = async (req, res) => {
+  console.log('getTemporaryStayLeaveStatistics called');
+  try {
+    const { year } = req.query;
+    const yearNum = year ? parseInt(year) : null;
+
+    // Lấy tất cả các tháng có dữ liệu (từ start_date đầu tiên đến hiện tại)
+    let dateRangeResult;
+    if (yearNum) {
+      // Nếu có chọn năm, chỉ lấy dữ liệu trong năm đó (từ tháng 1 đến tháng 12)
+      dateRangeResult = await sql.query(`
+        SELECT 
+          DATE_TRUNC('month', $1::date)::date as min_month,
+          DATE_TRUNC('month', ($1::date + INTERVAL '1 year' - INTERVAL '1 day'))::date as max_month
+      `, [`${yearNum}-01-01`]);
+    } else {
+      // Nếu không chọn năm, lấy tất cả dữ liệu
+      dateRangeResult = await sql.query(`
+        SELECT 
+          DATE_TRUNC('month', MIN(start_date))::date as min_month,
+          DATE_TRUNC('month', MAX(COALESCE(end_date, CURRENT_DATE)))::date as max_month
+        FROM temporarystayleave
+        WHERE start_date IS NOT NULL
+      `);
+    }
+
+    const dateRange = Array.isArray(dateRangeResult) ? dateRangeResult : (dateRangeResult?.rows || []);
+    console.log('Date range result:', dateRange);
+    
+    if (!dateRange || dateRange.length === 0 || !dateRange[0]?.min_month) {
+      console.log('No date range found, returning empty data');
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+
+    const minMonth = dateRange[0].min_month;
+    const maxMonth = dateRange[0].max_month;
+
+    // Sử dụng generate_series để tạo tất cả các tháng và tính số lượng đang hoạt động
+    const monthlyStatsResult = await sql.query(`
+      WITH month_series AS (
+        SELECT generate_series(
+          $1::date,
+          $2::date,
+          '1 month'::interval
+        )::date as month_date
+      )
+      SELECT 
+        EXTRACT(YEAR FROM ms.month_date)::int as year,
+        EXTRACT(MONTH FROM ms.month_date)::int as month,
+        COUNT(CASE WHEN tsl.paper_type = 'TemporaryStay' 
+          AND tsl.start_date <= (ms.month_date + INTERVAL '1 month' - INTERVAL '1 day')
+          AND (tsl.end_date IS NULL OR tsl.end_date >= ms.month_date)
+          THEN 1 END) as temporary_stay,
+        COUNT(CASE WHEN tsl.paper_type = 'TemporaryLeave'
+          AND tsl.start_date <= (ms.month_date + INTERVAL '1 month' - INTERVAL '1 day')
+          AND (tsl.end_date IS NULL OR tsl.end_date >= ms.month_date)
+          THEN 1 END) as temporary_leave
+      FROM month_series ms
+      LEFT JOIN temporarystayleave tsl ON 1=1
+      GROUP BY ms.month_date
+      ORDER BY ms.month_date ASC
+    `, [minMonth, maxMonth]);
+
+    const monthlyStats = Array.isArray(monthlyStatsResult) ? monthlyStatsResult : (monthlyStatsResult?.rows || []);
+    
+    let chartData = monthlyStats.map(stat => ({
+      year: parseInt(stat.year) || 0,
+      month: parseInt(stat.month) || 0,
+      monthLabel: `Tháng ${stat.month}/${stat.year}`,
+      temporaryStay: parseInt(stat.temporary_stay) || 0,
+      temporaryLeave: parseInt(stat.temporary_leave) || 0
+    }));
+
+    // Nếu có chọn năm, đảm bảo có đủ 12 tháng (từ tháng 1 đến 12)
+    if (yearNum) {
+      const monthMap = new Map();
+      chartData.forEach(month => {
+        monthMap.set(month.month, month);
+      });
+
+      // Tạo đầy đủ 12 tháng
+      const fullYearData = [];
+      for (let m = 1; m <= 12; m++) {
+        if (monthMap.has(m)) {
+          fullYearData.push(monthMap.get(m));
+        } else {
+          // Tháng chưa có dữ liệu, tạo với giá trị 0
+          fullYearData.push({
+            year: yearNum,
+            month: m,
+            monthLabel: `Tháng ${m}/${yearNum}`,
+            temporaryStay: 0,
+            temporaryLeave: 0
+          });
+        }
+      }
+      chartData = fullYearData;
+    } else {
+      // Nếu không chọn năm, chỉ hiển thị tháng có dữ liệu
+      chartData = chartData.filter(month => month.temporaryStay > 0 || month.temporaryLeave > 0);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: chartData
+    });
+  } catch (error) {
+    console.error('TemporaryStayLeave statistics error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ success: false, error: error.message || 'Internal Server Error' });
+  }
+};
