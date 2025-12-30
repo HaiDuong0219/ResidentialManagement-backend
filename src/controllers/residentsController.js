@@ -65,17 +65,17 @@ export const deleteResident = async (req, res) => {
 
 export const getResidentStatistics = async (req, res) => {
   try {
-    // Thống kê theo giới tính
+    // Thống kê theo giới tính 
     const genderStats = await sql.query(`
       SELECT 
         gender,
         COUNT(*) as count
       FROM resident
-      WHERE gender IN ('Male', 'Female')
+      WHERE gender IS NOT NULL
       GROUP BY gender
     `);
 
-    // Thống kê theo độ tuổi - dùng CTE để tránh lỗi GROUP BY
+    // Thống kê theo độ tuổi
     const ageStats = await sql.query(`
       WITH age_categories AS (
         SELECT 
@@ -87,11 +87,11 @@ export const getResidentStatistics = async (req, res) => {
             WHEN EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 6 AND 10 THEN 'Cấp 1'
             WHEN EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 11 AND 14 THEN 'Cấp 2'
             WHEN EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 15 AND 17 THEN 'Cấp 3'
-            WHEN (gender = 'Male' AND EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 18 AND 60) 
-              OR (gender = 'Female' AND EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 18 AND 55) 
+            WHEN ((gender IN ('Nam', 'Male') AND EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 18 AND 60) 
+              OR (gender IN ('Nữ', 'Female') AND EXTRACT(YEAR FROM AGE(date_of_birth)) BETWEEN 18 AND 55))
               THEN 'Lao động'
-            WHEN (gender = 'Male' AND EXTRACT(YEAR FROM AGE(date_of_birth)) > 60) 
-              OR (gender = 'Female' AND EXTRACT(YEAR FROM AGE(date_of_birth)) > 55) 
+            WHEN ((gender IN ('Nam', 'Male') AND EXTRACT(YEAR FROM AGE(date_of_birth)) > 60) 
+              OR (gender IN ('Nữ', 'Female') AND EXTRACT(YEAR FROM AGE(date_of_birth)) > 55))
               THEN 'Nghỉ hưu'
             ELSE 'Khác'
           END as age_group
@@ -120,17 +120,30 @@ export const getResidentStatistics = async (req, res) => {
       SELECT COUNT(*) as total FROM resident
     `);
 
-    // Format dữ liệu giới tính
+    // Format dữ liệu giới tính 
     const genderData = {
       male: 0,
       female: 0
     };
-    const genderArray = Array.isArray(genderStats) ? genderStats : [];
+    
+    // Xử lý dữ liệu 
+    let genderArray = [];
+    if (Array.isArray(genderStats)) {
+      genderArray = genderStats;
+    } else if (genderStats && Array.isArray(genderStats.rows)) {
+      genderArray = genderStats.rows;
+    } else if (genderStats && typeof genderStats === 'object') {
+      genderArray = Object.values(genderStats);
+    }
+    
     genderArray.forEach(stat => {
-      if (stat && stat.gender === 'Male') {
-        genderData.male = parseInt(stat.count) || 0;
-      } else if (stat && stat.gender === 'Female') {
-        genderData.female = parseInt(stat.count) || 0;
+      if (!stat || !stat.gender) return;
+      
+      
+      if (stat.gender === 'Nam' || stat.gender === 'Male') {
+        genderData.male = (genderData.male || 0) + (parseInt(stat.count) || 0);
+      } else if (stat.gender === 'Nữ' || stat.gender === 'Female') {
+        genderData.female = (genderData.female || 0) + (parseInt(stat.count) || 0);
       }
     });
 

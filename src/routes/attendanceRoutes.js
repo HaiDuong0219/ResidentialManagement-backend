@@ -8,12 +8,16 @@ import {
     upsertAttendanceByMeetingId,
     getMeetingCheckinToken,
     getCheckinInfo,
-    confirmCheckin
+    confirmCheckin,
+    getAttendanceStatistics,
+    getTopAttendingHouseholds
 } from '../controllers/attendanceController.js';
 
 const router = express.Router();
 
 router.get('/', getAllAttendance);
+router.get('/statistics', getAttendanceStatistics);
+router.get('/top-households', getTopAttendingHouseholds);
 
 router.get('/meeting/:meetingId', getAttendanceByMeetingId);
 router.put('/meeting/:meetingId', upsertAttendanceByMeetingId);
