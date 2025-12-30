@@ -415,3 +415,153 @@ export const getTopAttendingHouseholds = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+// Thống kê tần suất tham gia họp theo tháng - chia theo các mức
+export const getAttendanceFrequencyByMonth = async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    
+    if (!year || !month) {
+      return res.status(400).json({ error: 'Year and month are required' });
+    }
+
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+
+    // Lấy tất cả cuộc họp trong tháng đó
+    const meetingsInMonth = await sql.query(`
+      SELECT id FROM meeting
+      WHERE EXTRACT(YEAR FROM time) = $1 
+      AND EXTRACT(MONTH FROM time) = $2
+    `, [yearNum, monthNum]);
+
+    const meetingIds = meetingsInMonth.map(m => m.id);
+    const totalMeetingsInMonth = meetingIds.length;
+
+    if (totalMeetingsInMonth === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          totalHouseholds: 0,
+          totalMeetings: 0,
+          categories: {
+            '>=90%': 0,
+            '70-90%': 0,
+            '50-70%': 0,
+            '<50%': 0
+          }
+        }
+      });
+    }
+
+    // Tính tỷ lệ tham gia của mỗi hộ trong tháng
+    const householdAttendance = await sql.query(`
+      SELECT 
+        h.id as household_id,
+        COUNT(CASE WHEN a.attended = TRUE THEN 1 END) as attended_count
+      FROM household h
+      LEFT JOIN attendance a ON a.household_id = h.id 
+        AND a.meeting_id = ANY($1::int[])
+      GROUP BY h.id
+    `, [meetingIds]);
+
+    // Phân loại hộ theo mức độ tham gia
+    const categories = {
+      '>=90%': 0,
+      '70-90%': 0,
+      '50-70%': 0,
+      '<50%': 0
+    };
+
+    const totalHouseholds = Array.isArray(householdAttendance) ? householdAttendance.length : 0;
+
+    householdAttendance.forEach(household => {
+      const attended = parseInt(household.attended_count) || 0;
+      const rate = totalMeetingsInMonth > 0 ? (attended / totalMeetingsInMonth * 100) : 0;
+
+      if (rate >= 90) {
+        categories['>=90%']++;
+      } else if (rate >= 70) {
+        categories['70-90%']++;
+      } else if (rate >= 50) {
+        categories['50-70%']++;
+      } else {
+        categories['<50%']++;
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalHouseholds: totalHouseholds,
+        totalMeetings: totalMeetingsInMonth,
+        categories: categories
+      }
+    });
+  } catch (error) {
+    console.error('Attendance frequency by month error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+// Lấy danh sách hộ có tỷ lệ tham gia >= 90% trong cả năm (gia đình văn hóa)
+export const getCulturalFamilies = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const yearNum = year ? parseInt(year) : new Date().getFullYear();
+
+    // Lấy tất cả cuộc họp trong năm
+    const meetingsInYear = await sql.query(`
+      SELECT id FROM meeting
+      WHERE EXTRACT(YEAR FROM time) = $1
+    `, [yearNum]);
+
+    const meetingIds = meetingsInYear.map(m => m.id);
+    const totalMeetingsInYear = meetingIds.length;
+
+    if (totalMeetingsInYear === 0) {
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Tính tỷ lệ tham gia của mỗi hộ trong năm
+    const householdAttendance = await sql.query(`
+      SELECT 
+        h.id as household_id,
+        h.household_code,
+        r.full_name as head_name,
+        COUNT(CASE WHEN a.attended = TRUE THEN 1 END) as attended_count
+      FROM household h
+      LEFT JOIN resident r ON r.id = h.head_id
+      LEFT JOIN attendance a ON a.household_id = h.id 
+        AND a.meeting_id = ANY($1::int[])
+      GROUP BY h.id, h.household_code, r.full_name
+      HAVING COUNT(CASE WHEN a.attended = TRUE THEN 1 END)::numeric / $2 >= 0.9
+      ORDER BY attended_count DESC, h.household_code
+    `, [meetingIds, totalMeetingsInYear]);
+
+    const result = Array.isArray(householdAttendance) ? householdAttendance.map(household => {
+      const attended = parseInt(household.attended_count) || 0;
+      const rate = totalMeetingsInYear > 0 ? (attended / totalMeetingsInYear * 100) : 0;
+
+      return {
+        householdId: parseInt(household.household_id) || 0,
+        householdCode: household.household_code || '',
+        headName: household.head_name || 'Chưa có chủ hộ',
+        attendanceCount: attended,
+        totalMeetings: totalMeetingsInYear,
+        attendanceRate: parseFloat(rate.toFixed(2))
+      };
+    }) : [];
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Cultural families error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};

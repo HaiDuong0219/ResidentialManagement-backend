@@ -10,7 +10,9 @@ import {
     getCheckinInfo,
     confirmCheckin,
     getAttendanceStatistics,
-    getTopAttendingHouseholds
+    getTopAttendingHouseholds,
+    getAttendanceFrequencyByMonth,
+    getCulturalFamilies
 } from '../controllers/attendanceController.js';
 
 const router = express.Router();
@@ -18,6 +20,8 @@ const router = express.Router();
 router.get('/', getAllAttendance);
 router.get('/statistics', getAttendanceStatistics);
 router.get('/top-households', getTopAttendingHouseholds);
+router.get('/frequency-by-month', getAttendanceFrequencyByMonth);
+router.get('/cultural-families', getCulturalFamilies);
 
 router.get('/meeting/:meetingId', getAttendanceByMeetingId);
 router.put('/meeting/:meetingId', upsertAttendanceByMeetingId);
