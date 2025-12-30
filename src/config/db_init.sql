@@ -53,7 +53,7 @@ CREATE TABLE Resident (
 
     registration_date DATE,                 -- Ngày đăng ký thường trú
     relation_to_head VARCHAR(100),          -- Quan hệ với chủ hộ
-    gender VARCHAR(10) CHECK (gender IN ('Male', 'Female')), -- Giới tính
+    gender VARCHAR(10) CHECK (gender IN ('Nam', 'Nữ')), -- Giới tính
     status VARCHAR(50) DEFAULT 'Permanent', -- Trạng thái cư trú (TemporaryStay, TemporaryLeave, Thường trú, Tạm trú, Tạm vắng)
 
     -- Khóa ngoại: nhân khẩu thuộc về 1 hộ gia đình
