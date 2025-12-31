@@ -28,7 +28,7 @@ export const login = async (req, res) => {
 
   try {
     const result = await sql.query(
-      'SELECT password_hash, status FROM account WHERE email = $1',
+      'SELECT id, email, full_name, role, status, password_hash FROM account WHERE email = $1',
       [email]
     );
 
@@ -51,7 +51,17 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    res.status(200).json({ success: true, message: 'Login successful' });
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        id: user?.id,
+        email: user?.email,
+        full_name: user?.full_name,
+        role: user?.role,
+        status: user?.status,
+      },
+    });
   } catch (error) {
     console.error('Login Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });

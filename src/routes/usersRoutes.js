@@ -4,6 +4,9 @@ import {
   listUsers,
   getUserByEmail,
   getUserById,
+  getMyProfile,
+  updateMyProfile,
+  changeMyPassword,
   getUserRoles,
   getUserStats,
   createUser, 
@@ -28,6 +31,7 @@ router.post('/bulk/status', bulkSetUserStatus);
 router.get('/', listUsers);
 
 // Lookups
+router.get('/me', getMyProfile);
 router.get('/by-email', getUserByEmail);
 router.get('/search', getUserByEmail); // legacy alias
 router.get('/:id', getUserById);
@@ -36,6 +40,10 @@ router.get('/:id', getUserById);
 router.post('/', createUser);
 
 // Update
+// Profile (current user)
+router.patch('/me', updateMyProfile);
+router.patch('/me/password', changeMyPassword);
+
 router.patch('/:id', updateUserById);
 router.patch('/:id/status', setUserStatusById);
 router.patch('/:id/password', setUserPasswordById);
