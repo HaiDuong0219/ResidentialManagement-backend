@@ -118,7 +118,7 @@ export const getResidentById = async (req, res) => {
     const result = await sql.query(`SELECT * FROM resident WHERE id = $1`, [id]);
     const rows = normalizeRows(result);
     if (rows.length === 0) return res.status(404).json({ error: "Resident not found" });
-    res.status(200).json({ success: true, data: rows[0] });
+    res.status(200).json({ success: true, data: normalizeResidentDates(rows[0]) });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
@@ -156,6 +156,21 @@ export const updateResident = async (req, res) => {
     gender,
     status,
   } = req.body;
+
+  const dateOfBirthYmd = toLocalYmd(date_of_birth);
+  const idIssueDateYmd = toLocalYmd(id_issue_date);
+  const registrationDateYmd = toLocalYmd(registration_date);
+
+  // Keep existing behavior but avoid passing invalid empty strings to DATE columns.
+  if (date_of_birth !== null && date_of_birth !== undefined && date_of_birth !== "" && !dateOfBirthYmd) {
+    return res.status(400).json({ error: "Invalid date_of_birth" });
+  }
+  if (id_issue_date !== null && id_issue_date !== undefined && id_issue_date !== "" && !idIssueDateYmd) {
+    return res.status(400).json({ error: "Invalid id_issue_date" });
+  }
+  if (registration_date !== null && registration_date !== undefined && registration_date !== "" && !registrationDateYmd) {
+    return res.status(400).json({ error: "Invalid registration_date" });
+  }
 
   try {
     const result = await sql.query(
@@ -217,15 +232,15 @@ export const updateResident = async (req, res) => {
       [
         household_id ?? null,
         full_name ?? null,
-        date_of_birth ?? null,
+        dateOfBirthYmd,
         place_of_birth ?? null,
         native_place ?? null,
         ethnicity ?? null,
         occupation ?? null,
         id_number ?? null,
-        id_issue_date ?? null,
+        idIssueDateYmd,
         id_issue_place ?? null,
-        registration_date ?? null,
+        registrationDateYmd,
         relation_to_head ?? null,
         gender ?? null,
         status ?? null,
