@@ -30,7 +30,7 @@ export const getAllHouseholds = async (req, res) => {
       SELECT h.*, r.full_name as head_name 
       FROM household h 
       LEFT JOIN resident r ON h.head_id = r.id
-      ORDER BY h.household_code
+      ORDER BY h.id
     `);
     res.status(200).json({ success: true, data: households });
   } catch (error) {
@@ -229,8 +229,6 @@ export const splitHousehold = async (req, res) => {
       }))
     );
 
-    // One statement to ensure: old household exists, all residents belong to old household (by household.id),
-    // then insert new household and move residents. If any condition fails, nothing changes.
     const result = await sql.query(
       `
       WITH old_household AS (
