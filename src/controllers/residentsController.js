@@ -1,5 +1,7 @@
 import { sql } from "../config/db.js";
 
+const normalizeRows = (result) => result?.rows ?? result;
+
 export const createResident = async (req, res) => {
   const {
     household_id,
@@ -23,23 +25,47 @@ export const createResident = async (req, res) => {
   }
 
   try {
-    await sql.query(
-      `INSERT INTO resident (
-        household_id,
-        full_name,
-        date_of_birth,
-        place_of_birth,
-        native_place,
-        ethnicity,
-        occupation,
-        id_number,
-        id_issue_date,
-        id_issue_place,
-        registration_date,
-        relation_to_head,
-        gender,
-        status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    const result = await sql.query(
+      `
+      WITH ins AS (
+        INSERT INTO resident (
+          household_id,
+          full_name,
+          date_of_birth,
+          place_of_birth,
+          native_place,
+          ethnicity,
+          occupation,
+          id_number,
+          id_issue_date,
+          id_issue_place,
+          registration_date,
+          relation_to_head,
+          gender,
+          status
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        RETURNING id, household_id, to_jsonb(resident.*) AS new_data
+      ), log AS (
+        INSERT INTO residentlog (
+          subject_resident_id,
+          resident_id,
+          household_id_before,
+          household_id_after,
+          change_type,
+          change_details
+        )
+        SELECT
+          ins.id,
+          ins.id,
+          NULL,
+          ins.household_id,
+          'CREATE',
+          jsonb_build_object('old', NULL, 'new', ins.new_data, 'meta', jsonb_build_object('source', 'createResident'))
+        FROM ins
+        RETURNING id
+      )
+      SELECT ins.id AS resident_id FROM ins;
+      `,
       [
         household_id,
         full_name,
@@ -54,11 +80,16 @@ export const createResident = async (req, res) => {
         registration_date ?? null,
         relation_to_head ?? null,
         gender ?? null,
-        status ?? 'Permanent',
+        status ?? "Permanent",
       ]
     );
 
-    res.status(201).json({ success: true, message: "Resident created successfully" });
+    const rows = normalizeRows(result);
+    res.status(201).json({
+      success: true,
+      message: "Resident created successfully",
+      data: { id: rows?.[0]?.resident_id ?? null },
+    });
   } catch (error) {
     if (error && error.code === "23505") {
       return res.status(400).json({ error: "ID number already exists" });
@@ -73,8 +104,8 @@ export const createResident = async (req, res) => {
 
 export const getAllResidents = async (req, res) => {
   try {
-    const rows = await sql.query("SELECT * FROM resident ORDER BY id");
-    res.status(200).json({ success: true, data: rows });
+    const result = await sql.query("SELECT * FROM resident ORDER BY id");
+    res.status(200).json({ success: true, data: normalizeRows(result) });
   } catch (error) {
     console.error("getAllResidents error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -84,7 +115,8 @@ export const getAllResidents = async (req, res) => {
 export const getResidentById = async (req, res) => {
   const { id } = req.params;
   try {
-    const rows = await sql.query(`SELECT * FROM resident WHERE id = $1`, [id]);
+    const result = await sql.query(`SELECT * FROM resident WHERE id = $1`, [id]);
+    const rows = normalizeRows(result);
     if (rows.length === 0) return res.status(404).json({ error: "Resident not found" });
     res.status(200).json({ success: true, data: rows[0] });
   } catch (error) {
@@ -95,11 +127,11 @@ export const getResidentById = async (req, res) => {
 export const getResidentsByHouseholdId = async (req, res) => {
   const { household_id } = req.params;
   try {
-    const rows = await sql.query(
+    const result = await sql.query(
       "SELECT * FROM resident WHERE household_id = $1 ORDER BY relation_to_head, full_name",
       [household_id]
     );
-    res.status(200).json({ success: true, data: rows });
+    res.status(200).json({ success: true, data: normalizeRows(result) });
   } catch (error) {
     console.error("getResidentsByHouseholdId error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -126,26 +158,62 @@ export const updateResident = async (req, res) => {
   } = req.body;
 
   try {
-    const existing = await sql.query("SELECT id FROM resident WHERE id = $1", [id]);
-    if (existing.length === 0) return res.status(404).json({ error: "Resident not found" });
-
-    await sql.query(
-      `UPDATE resident SET
-        household_id = $1,
-        full_name = $2,
-        date_of_birth = $3,
-        place_of_birth = $4,
-        native_place = $5,
-        ethnicity = $6,
-        occupation = $7,
-        id_number = $8,
-        id_issue_date = $9,
-        id_issue_place = $10,
-        registration_date = $11,
-        relation_to_head = $12,
-        gender = $13,
-        status = $14
-      WHERE id = $15`,
+    const result = await sql.query(
+      `
+      WITH old AS (
+        SELECT
+          id,
+          household_id AS household_id_before,
+          to_jsonb(resident.*) AS old_data
+        FROM resident
+        WHERE id = $15
+      ), upd AS (
+        UPDATE resident SET
+          household_id = $1,
+          full_name = $2,
+          date_of_birth = $3,
+          place_of_birth = $4,
+          native_place = $5,
+          ethnicity = $6,
+          occupation = $7,
+          id_number = $8,
+          id_issue_date = $9,
+          id_issue_place = $10,
+          registration_date = $11,
+          relation_to_head = $12,
+          gender = $13,
+          status = $14
+        WHERE id = $15
+        RETURNING id, household_id AS household_id_after, to_jsonb(resident.*) AS new_data
+      ), log AS (
+        INSERT INTO residentlog (
+          subject_resident_id,
+          resident_id,
+          household_id_before,
+          household_id_after,
+          change_type,
+          change_details
+        )
+        SELECT
+          upd.id,
+          upd.id,
+          old.household_id_before,
+          upd.household_id_after,
+          CASE
+            WHEN old.household_id_before IS DISTINCT FROM upd.household_id_after THEN 'MOVE_HOUSEHOLD'
+            ELSE 'UPDATE'
+          END,
+          jsonb_build_object(
+            'old', old.old_data,
+            'new', upd.new_data,
+            'meta', jsonb_build_object('source', 'updateResident')
+          )
+        FROM old
+        JOIN upd ON upd.id = old.id
+        RETURNING id
+      )
+      SELECT (SELECT COUNT(*) FROM old) AS old_exists;
+      `,
       [
         household_id ?? null,
         full_name ?? null,
@@ -165,6 +233,11 @@ export const updateResident = async (req, res) => {
       ]
     );
 
+    const rows = normalizeRows(result);
+    if (!rows?.[0] || Number(rows[0].old_exists) !== 1) {
+      return res.status(404).json({ error: "Resident not found" });
+    }
+
     res.status(200).json({ success: true, message: "Resident updated successfully" });
   } catch (error) {
     if (error && error.code === "23505") {
@@ -181,10 +254,49 @@ export const updateResident = async (req, res) => {
 export const deleteResident = async (req, res) => {
   const { id } = req.params;
   try {
-    const existing = await sql.query("SELECT id FROM resident WHERE id = $1", [id]);
-    if (existing.length === 0) return res.status(404).json({ error: "Resident not found" });
+    const result = await sql.query(
+      `
+      WITH old AS (
+        SELECT
+          id,
+          household_id AS household_id_before,
+          to_jsonb(resident.*) AS old_data
+        FROM resident
+        WHERE id = $1
+      ), del AS (
+        DELETE FROM resident
+        WHERE id = $1
+        RETURNING id
+      ), log AS (
+        INSERT INTO residentlog (
+          subject_resident_id,
+          resident_id,
+          household_id_before,
+          household_id_after,
+          change_type,
+          change_details
+        )
+        SELECT
+          old.id,
+          NULL,
+          old.household_id_before,
+          NULL,
+          'DELETE',
+          jsonb_build_object('old', old.old_data, 'new', NULL, 'meta', jsonb_build_object('source', 'deleteResident'))
+        FROM old
+        WHERE EXISTS (SELECT 1 FROM del)
+        RETURNING id
+      )
+      SELECT (SELECT COUNT(*) FROM del) AS deleted_count;
+      `,
+      [id]
+    );
 
-    await sql.query("DELETE FROM resident WHERE id = $1", [id]);
+    const rows = normalizeRows(result);
+    if (!rows?.[0] || Number(rows[0].deleted_count) !== 1) {
+      return res.status(404).json({ error: "Resident not found" });
+    }
+
     res.status(200).json({ success: true, message: "Resident deleted successfully" });
   } catch (error) {
     console.error("deleteResident error:", error);
