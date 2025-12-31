@@ -2,6 +2,29 @@ import { sql } from "../config/db.js";
 
 const normalizeRows = (result) => result?.rows ?? result;
 
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// Convert a Date/ISO value into local YYYY-MM-DD (date-only).
+// This avoids the common off-by-one-day bug when DATE columns are serialized as JS Date.
+const toLocalYmd = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const normalizeResidentDates = (row) => {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    date_of_birth: toLocalYmd(row.date_of_birth),
+    id_issue_date: toLocalYmd(row.id_issue_date),
+    registration_date: toLocalYmd(row.registration_date),
+  };
+};
+
 export const createResident = async (req, res) => {
   const {
     household_id,
@@ -105,7 +128,8 @@ export const createResident = async (req, res) => {
 export const getAllResidents = async (req, res) => {
   try {
     const result = await sql.query("SELECT * FROM resident ORDER BY id");
-    res.status(200).json({ success: true, data: normalizeRows(result) });
+    const rows = normalizeRows(result);
+    res.status(200).json({ success: true, data: Array.isArray(rows) ? rows.map(normalizeResidentDates) : rows });
   } catch (error) {
     console.error("getAllResidents error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -118,7 +142,7 @@ export const getResidentById = async (req, res) => {
     const result = await sql.query(`SELECT * FROM resident WHERE id = $1`, [id]);
     const rows = normalizeRows(result);
     if (rows.length === 0) return res.status(404).json({ error: "Resident not found" });
-    res.status(200).json({ success: true, data: rows[0] });
+    res.status(200).json({ success: true, data: normalizeResidentDates(rows[0]) });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
@@ -131,7 +155,8 @@ export const getResidentsByHouseholdId = async (req, res) => {
       "SELECT * FROM resident WHERE household_id = $1 ORDER BY relation_to_head, full_name",
       [household_id]
     );
-    res.status(200).json({ success: true, data: normalizeRows(result) });
+    const rows = normalizeRows(result);
+    res.status(200).json({ success: true, data: Array.isArray(rows) ? rows.map(normalizeResidentDates) : rows });
   } catch (error) {
     console.error("getResidentsByHouseholdId error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -156,6 +181,21 @@ export const updateResident = async (req, res) => {
     gender,
     status,
   } = req.body;
+
+  const dateOfBirthYmd = toLocalYmd(date_of_birth);
+  const idIssueDateYmd = toLocalYmd(id_issue_date);
+  const registrationDateYmd = toLocalYmd(registration_date);
+
+  // Keep existing behavior but avoid passing invalid empty strings to DATE columns.
+  if (date_of_birth !== null && date_of_birth !== undefined && date_of_birth !== "" && !dateOfBirthYmd) {
+    return res.status(400).json({ error: "Invalid date_of_birth" });
+  }
+  if (id_issue_date !== null && id_issue_date !== undefined && id_issue_date !== "" && !idIssueDateYmd) {
+    return res.status(400).json({ error: "Invalid id_issue_date" });
+  }
+  if (registration_date !== null && registration_date !== undefined && registration_date !== "" && !registrationDateYmd) {
+    return res.status(400).json({ error: "Invalid registration_date" });
+  }
 
   try {
     const result = await sql.query(
@@ -217,15 +257,15 @@ export const updateResident = async (req, res) => {
       [
         household_id ?? null,
         full_name ?? null,
-        date_of_birth ?? null,
+        dateOfBirthYmd,
         place_of_birth ?? null,
         native_place ?? null,
         ethnicity ?? null,
         occupation ?? null,
         id_number ?? null,
-        id_issue_date ?? null,
+        idIssueDateYmd,
         id_issue_place ?? null,
-        registration_date ?? null,
+        registrationDateYmd,
         relation_to_head ?? null,
         gender ?? null,
         status ?? null,
