@@ -2,6 +2,25 @@ import { sql } from "../config/db.js";
 
 const normalizeRows = (result) => result?.rows ?? result;
 
+const pad2 = (n) => String(n).padStart(2, "0");
+const toLocalYmd = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const normalizeResidentDates = (row) => {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    date_of_birth: toLocalYmd(row.date_of_birth),
+    id_issue_date: toLocalYmd(row.id_issue_date),
+    registration_date: toLocalYmd(row.registration_date),
+  };
+};
+
 export const createHousehold = async (req, res) => {
   const { household_code, head_id, house_number, street } = req.body;
   
@@ -99,8 +118,9 @@ export const getHouseholdResidents = async (req, res) => {
       `,
       [household[0].id]
     );
-    
-    res.status(200).json({ success: true, data: residents });
+
+    const rows = normalizeRows(residents);
+    res.status(200).json({ success: true, data: Array.isArray(rows) ? rows.map(normalizeResidentDates) : rows });
   } catch (error) {
     res.status(500).json({ error: 'Internal Server Error' });
   }

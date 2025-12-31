@@ -38,7 +38,7 @@ CREATE TABLE Household (
 -- Bảng Resident: lưu thông tin nhân khẩu
 CREATE TABLE Resident (
     id SERIAL PRIMARY KEY,                 -- Khóa chính nhân khẩu
-    household_id INT NOT NULL,             -- FK → Household.id (nhân khẩu thường trú tại hộ nào)
+    household_id INT,                      -- FK → Household.id (nhân khẩu thường trú tại hộ nào)
 
     full_name VARCHAR(150) NOT NULL,       -- Họ tên
     date_of_birth DATE NOT NULL,            -- Ngày sinh
