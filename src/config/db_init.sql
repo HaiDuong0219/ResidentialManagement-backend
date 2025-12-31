@@ -38,7 +38,7 @@ CREATE TABLE Household (
 -- Bảng Resident: lưu thông tin nhân khẩu
 CREATE TABLE Resident (
     id SERIAL PRIMARY KEY,                 -- Khóa chính nhân khẩu
-    household_id INT NOT NULL,             -- FK → Household.id (nhân khẩu thường trú tại hộ nào)
+    household_id INT,                      -- FK → Household.id (nhân khẩu thường trú tại hộ nào)
 
     full_name VARCHAR(150) NOT NULL,       -- Họ tên
     date_of_birth DATE NOT NULL,            -- Ngày sinh
@@ -54,7 +54,7 @@ CREATE TABLE Resident (
     registration_date DATE,                 -- Ngày đăng ký thường trú
     relation_to_head VARCHAR(100),          -- Quan hệ với chủ hộ
     gender VARCHAR(10) CHECK (gender IN ('Nam', 'Nữ')), -- Giới tính
-    status VARCHAR(50) DEFAULT 'Permanent', -- Trạng thái cư trú (TemporaryStay, TemporaryLeave, Thường trú, Tạm trú, Tạm vắng)
+    status VARCHAR(50) DEFAULT 'Permanent', -- Trạng thái cư trú (TemporaryStay, TemporaryLeave, Thường trú, Tạm trú, Tạm vắng, Đã chết)
 
     -- Khóa ngoại: nhân khẩu thuộc về 1 hộ gia đình
     CONSTRAINT fk_resident_household
