@@ -1,5 +1,7 @@
 import { sql } from "../config/db.js";
 
+const normalizeRows = (result) => result?.rows ?? result;
+
 export const createHousehold = async (req, res) => {
   const { household_code, head_id, house_number, street } = req.body;
   
@@ -236,6 +238,14 @@ export const splitHousehold = async (req, res) => {
         FROM household
         WHERE id = $1
       ),
+      pre AS (
+        SELECT r.id,
+               r.household_id AS household_id_before,
+               to_jsonb(r.*) AS old_data
+        FROM resident r
+        JOIN old_household oh ON TRUE
+        WHERE r.id = ANY($2::int[]) AND r.household_id = oh.id
+      ),
       selected AS (
         SELECT r.id
         FROM resident r
@@ -273,7 +283,36 @@ export const splitHousehold = async (req, res) => {
         WHERE r.id = ANY($2::int[])
           AND r.household_id = (SELECT id FROM old_household)
           AND EXISTS (SELECT 1 FROM ins)
-        RETURNING r.id
+        RETURNING r.id, r.household_id AS household_id_after, to_jsonb(r.*) AS new_data
+      ),
+      log_move AS (
+        INSERT INTO residentlog (
+          subject_resident_id,
+          resident_id,
+          household_id_before,
+          household_id_after,
+          change_type,
+          change_details
+        )
+        SELECT
+          pre.id,
+          pre.id,
+          pre.household_id_before,
+          upd.household_id_after,
+          'HOUSEHOLD_SPLIT',
+          jsonb_build_object(
+            'old', pre.old_data,
+            'new', upd.new_data,
+            'meta', jsonb_build_object(
+              'source', 'splitHousehold',
+              'old_household_id', (SELECT id FROM old_household),
+              'new_household_id', (SELECT id FROM ins),
+              'new_household_code', (SELECT household_code FROM ins)
+            )
+          )
+        FROM pre
+        JOIN upd ON upd.id = pre.id
+        RETURNING id
       ),
       fix_old AS (
         UPDATE household
@@ -289,6 +328,7 @@ export const splitHousehold = async (req, res) => {
         (SELECT requested_count FROM valid) AS requested_count,
         (SELECT COUNT(*) FROM ins) AS inserted_count,
         (SELECT COUNT(*) FROM upd) AS moved_rows,
+        (SELECT COUNT(*) FROM log_move) AS log_rows,
         (SELECT COUNT(*) FROM rel_map) AS provided_rel_rows,
         (SELECT COUNT(*) FROM fix_old) AS cleared_old_head_rows,
         (SELECT household_code FROM old_household) AS old_household_code,
@@ -305,7 +345,8 @@ export const splitHousehold = async (req, res) => {
       ]
     );
 
-    const row = Array.isArray(result) ? result[0] : result?.rows?.[0];
+    const rows = normalizeRows(result);
+    const row = rows?.[0];
     if (!row || Number(row.old_exists) !== 1) {
       return res.status(404).json({ error: "Household not found" });
     }
@@ -343,22 +384,77 @@ export const updateHousehold = async (req, res) => {
   const { household_code, head_id, house_number, street } = req.body;
   
   try {
-    const existingHousehold = await sql.query('SELECT id FROM household WHERE id = $1', [id]);
-    
-    if (existingHousehold.length === 0) {
-      return res.status(404).json({ error: 'Household not found' });
-    }
-    
-    await sql.query(
-      "UPDATE household SET household_code = $1, head_id = $2, house_number = $3, street = $4 WHERE id = $5",
+    const existingHouseholdResult = await sql.query(
+      'SELECT id, household_code, head_id, house_number, street FROM household WHERE id = $1',
+      [id]
+    );
+    const existingHousehold = normalizeRows(existingHouseholdResult);
+    if (existingHousehold.length === 0) return res.status(404).json({ error: 'Household not found' });
+    const old = existingHousehold[0];
+
+    const updateResult = await sql.query(
+      "UPDATE household SET household_code = $1, head_id = $2, house_number = $3, street = $4 WHERE id = $5 RETURNING id, household_code, head_id, house_number, street",
       [household_code, head_id, house_number, street, id]
     );
-    
+    const updatedRows = normalizeRows(updateResult);
+    const updated = updatedRows?.[0];
+
+    // Log head change as ONE ResidentLog row (avoid duplicated rows)
+    const oldHead = old?.head_id ?? null;
+    const newHead = updated?.head_id ?? null;
+    if (oldHead !== newHead && (oldHead !== null || newHead !== null)) {
+      const meta = {
+        source: 'updateHousehold',
+        household_id: Number(id),
+        household_code_before: old?.household_code ?? null,
+        household_code_after: updated?.household_code ?? null,
+        head_id_before: oldHead,
+        head_id_after: newHead,
+      };
+
+      // Choose a stable subject for the log (prefer new head, fallback to old head)
+      const subjectId = newHead ?? oldHead;
+
+      // Capture both before/after head identities for UI
+      const headInfoResult = await sql.query(
+        `
+        SELECT
+          (SELECT jsonb_build_object('id', r1.id, 'full_name', r1.full_name, 'id_number', r1.id_number)
+           FROM resident r1 WHERE r1.id = $1) AS before_head,
+          (SELECT jsonb_build_object('id', r2.id, 'full_name', r2.full_name, 'id_number', r2.id_number)
+           FROM resident r2 WHERE r2.id = $2) AS after_head
+        `,
+        [oldHead, newHead]
+      );
+      const headInfoRows = normalizeRows(headInfoResult);
+      const beforeHead = headInfoRows?.[0]?.before_head ?? null;
+      const afterHead = headInfoRows?.[0]?.after_head ?? null;
+
+      await sql.query(
+        `
+        INSERT INTO residentlog (
+          subject_resident_id,
+          resident_id,
+          household_id_before,
+          household_id_after,
+          change_type,
+          change_details
+        ) VALUES ($1, $1, $2, $2, 'HEAD_CHANGED', $3::jsonb)
+        `,
+        [
+          subjectId,
+          Number(id),
+          JSON.stringify({ old: null, new: null, meta, before_head: beforeHead, after_head: afterHead }),
+        ]
+      );
+    }
+
     res.status(200).json({ success: true, message: 'Household updated successfully' });
   } catch (error) {
     if (error.code === '23505') { 
       res.status(400).json({ error: 'Household code already exists' });
     } else {
+      console.error('updateHousehold error:', error);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }

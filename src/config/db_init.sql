@@ -80,17 +80,39 @@ ON DELETE SET NULL;
 -- Bảng ResidentLog: lưu lịch sử thay đổi thông tin nhân khẩu
 CREATE TABLE ResidentLog (
     id SERIAL PRIMARY KEY,                 -- Khóa chính log
-    resident_id INT NOT NULL,              -- FK → Resident.id
-    change_type VARCHAR(100) NOT NULL,     -- Loại thay đổi (Thêm mới, Cập nhật, Chuyển đi...)
-    change_details JSONB,                  -- Chi tiết thay đổi (dữ liệu cũ/mới)
+    -- subject_resident_id: luôn lưu ID nhân khẩu bị tác động (kể cả khi bản ghi Resident đã bị xóa)
+    subject_resident_id INT NOT NULL,
+
+    -- resident_id: tham chiếu mềm (nullable) để JOIN lấy tên nhanh khi nhân khẩu còn tồn tại
+    resident_id INT,
+
+    -- household snapshot để truy vấn nhanh lịch sử theo hộ
+    household_id_before INT,
+    household_id_after INT,
+
+    change_type VARCHAR(100) NOT NULL,     -- Loại thay đổi (CREATE/UPDATE/DELETE/MOVE_HOUSEHOLD/HEAD_CHANGED/HOUSEHOLD_SPLIT...)
+
+    -- change_details chứa toàn bộ snapshot cũ/mới và metadata liên quan
+    -- gợi ý format: { old: {...} | null, new: {...} | null, meta: {...} }
+    change_details JSONB,
     note TEXT,                             -- Ghi chú thêm
+    changed_by_account_id INT,
     change_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    -- Khi xóa nhân khẩu → xóa luôn log
+    -- Khi xóa nhân khẩu: vẫn giữ log, chỉ set resident_id = NULL
     FOREIGN KEY (resident_id)
     REFERENCES Resident(id)
-    ON DELETE CASCADE
+    ON DELETE SET NULL,
+
+    FOREIGN KEY (changed_by_account_id)
+    REFERENCES Account(id)
+    ON DELETE SET NULL
 );
+
+CREATE INDEX idx_residentlog_subject_resident_id ON ResidentLog(subject_resident_id);
+CREATE INDEX idx_residentlog_change_date ON ResidentLog(change_date DESC);
+CREATE INDEX idx_residentlog_household_before ON ResidentLog(household_id_before);
+CREATE INDEX idx_residentlog_household_after ON ResidentLog(household_id_after);
 
 
 
