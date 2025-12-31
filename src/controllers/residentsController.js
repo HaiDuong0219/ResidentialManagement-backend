@@ -43,8 +43,38 @@ export const createResident = async (req, res) => {
     status,
   } = req.body;
 
-  if (!household_id || !full_name || !date_of_birth) {
-    return res.status(400).json({ error: "Please fill all required fields" });
+  const fullName = typeof full_name === "string" ? full_name.trim() : full_name;
+  const dateOfBirthYmd = toLocalYmd(date_of_birth);
+  const idIssueDateYmd = toLocalYmd(id_issue_date);
+  const registrationDateYmd = toLocalYmd(registration_date);
+
+  const missingFields = [];
+  if (!fullName) missingFields.push("full_name");
+  if (!dateOfBirthYmd) missingFields.push("date_of_birth");
+  if (missingFields.length > 0) {
+    return res.status(400).json({ error: "Please fill all required fields", missing_fields: missingFields });
+  }
+
+  // Validate optional date fields if provided.
+  if (id_issue_date !== null && id_issue_date !== undefined && id_issue_date !== "" && !idIssueDateYmd) {
+    return res.status(400).json({ error: "Invalid id_issue_date" });
+  }
+  if (registration_date !== null && registration_date !== undefined && registration_date !== "" && !registrationDateYmd) {
+    return res.status(400).json({ error: "Invalid registration_date" });
+  }
+
+  // household_id is optional (schema allows NULL). If provided, it must be a positive integer.
+  let householdId = household_id;
+  if (typeof householdId === "string") householdId = householdId.trim();
+  if (householdId === "") householdId = null;
+  if (householdId !== null && householdId !== undefined) {
+    const n = Number(householdId);
+    if (!Number.isInteger(n) || n <= 0) {
+      return res.status(400).json({ error: "Invalid household_id" });
+    }
+    householdId = n;
+  } else {
+    householdId = null;
   }
 
   try {
@@ -90,17 +120,17 @@ export const createResident = async (req, res) => {
       SELECT ins.id AS resident_id FROM ins;
       `,
       [
-        household_id,
-        full_name,
-        date_of_birth,
+        householdId,
+        fullName,
+        dateOfBirthYmd,
         place_of_birth ?? null,
         native_place ?? null,
         ethnicity ?? null,
         occupation ?? null,
         id_number ?? null,
-        id_issue_date ?? null,
+        idIssueDateYmd,
         id_issue_place ?? null,
-        registration_date ?? null,
+        registrationDateYmd,
         relation_to_head ?? null,
         gender ?? null,
         status ?? "Permanent",
