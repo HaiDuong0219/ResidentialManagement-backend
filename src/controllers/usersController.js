@@ -388,3 +388,95 @@ export const deleteUserById = async (req, res) => {
     return res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 };
+
+export const getMyProfile = async (req, res) => {
+  try {
+    const email = String(req.query?.email ?? "").trim();
+    if (!email) return res.status(400).json({ success: false, error: "email is required" });
+
+    const rows = normalizeRows(
+      await sql.query(`SELECT ${SAFE_COLUMNS} FROM account WHERE email = $1`, [email])
+    );
+
+    if (!rows.length) return res.status(404).json({ success: false, error: "User not found" });
+
+    return res.status(200).json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error("getMyProfile error:", error);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
+
+export const updateMyProfile = async (req, res) => {
+  try {
+    const currentEmail = String(req.body?.email ?? "").trim();
+    if (!currentEmail) return res.status(400).json({ success: false, error: "email is required" });
+
+    const full_name = req.body?.full_name ?? null;
+    const newEmail = req.body?.new_email ?? null;
+
+    if (full_name === null && newEmail === null) {
+      return res.status(400).json({ success: false, error: "Nothing to update" });
+    }
+
+    const rows = normalizeRows(
+      await sql.query(
+        `
+        UPDATE account
+        SET
+          email = COALESCE($2, email),
+          full_name = COALESCE($3, full_name)
+        WHERE email = $1
+        RETURNING ${SAFE_COLUMNS}
+        `,
+        [currentEmail, newEmail, full_name]
+      )
+    );
+
+    if (!rows.length) return res.status(404).json({ success: false, error: "User not found" });
+
+    return res.status(200).json({ success: true, data: rows[0] });
+  } catch (error) {
+    if (error?.code === "23505") {
+      return res.status(400).json({ success: false, error: "Email đã tồn tại" });
+    }
+    console.error("updateMyProfile error:", error);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
+
+export const changeMyPassword = async (req, res) => {
+  try {
+    const email = String(req.body?.email ?? "").trim();
+    const current_password = req.body?.current_password;
+    const new_password = req.body?.new_password;
+
+    if (!email) return res.status(400).json({ success: false, error: "email is required" });
+    if (!current_password || !new_password) {
+      return res.status(400).json({ success: false, error: "current_password and new_password are required" });
+    }
+
+    const found = normalizeRows(
+      await sql.query(`SELECT password_hash, status FROM account WHERE email = $1`, [email])
+    );
+
+    if (!found.length) return res.status(404).json({ success: false, error: "User not found" });
+    if (found[0]?.status === false) return res.status(403).json({ success: false, error: "Account is disabled" });
+
+    const stored = found[0]?.password_hash;
+    const isMatch = stored !== undefined && stored !== null && String(current_password) === String(stored);
+    if (!isMatch) return res.status(401).json({ success: false, error: "Mật khẩu hiện tại không đúng" });
+
+    const updated = normalizeRows(
+      await sql.query(
+        `UPDATE account SET password_hash = $2 WHERE email = $1 RETURNING ${SAFE_COLUMNS}`,
+        [email, String(new_password)]
+      )
+    );
+
+    return res.status(200).json({ success: true, data: updated[0] });
+  } catch (error) {
+    console.error("changeMyPassword error:", error);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
