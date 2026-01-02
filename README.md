@@ -2,6 +2,17 @@
 
 A Node.js/Express REST API for managing households, residents, temporary stay/leave declarations, meetings, and meeting attendance (including QR-based public check-in).
 
+## Contributors
+
+Group: 20
+Contributors:
+
+Trịnh Minh Thành - 20235834
+Lê Duy Vũ - 20235878
+Đào Thái Hoàng - 20235720
+Trần Thu Phương - 20235811
+Nguyễn Hải Dương - 20235692
+
 ## Tech Stack
 
 - Node.js + Express
